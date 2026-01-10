@@ -14,7 +14,6 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
     // Modal Buttons & Inputs
     const createBoardBtn = document.getElementById('create-board-btn');
-    const mobileCreateBoardBtn = document.getElementById('mobile-create-board-btn');
     const cancelBoardBtn = document.getElementById('cancel-board-btn');
     const confirmCreateBoardBtn = document.getElementById('confirm-create-board-btn');
     const newBoardNameInput = document.getElementById('new-board-name');
@@ -37,7 +36,6 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
     // Lists & Counts
     const boardList = document.getElementById('board-list');
-    const mobileBoardList = document.getElementById('mobile-board-list');
     const todoList = document.getElementById('todo-list');
     const inprogressList = document.getElementById('inprogress-list');
     const doneList = document.getElementById('done-list');
@@ -45,6 +43,13 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const inprogressCount = document.getElementById('inprogress-count');
     const doneCount = document.getElementById('done-count');
     const boardTitleEl = document.getElementById('board-title');
+    
+    // Mobile Board Selector
+    const mobileBoardSelectBtn = document.getElementById('mobile-board-select-btn');
+    const mobileBoardDropdown = document.getElementById('mobile-board-dropdown');
+    const mobileBoardDropdownList = document.getElementById('mobile-board-dropdown-list');
+    const mobileBoardTitleText = document.getElementById('mobile-board-title-text');
+    const mobileDropdownCreateBtn = document.getElementById('mobile-dropdown-create-btn');
 
     // Notifications
     const notificationBtn = document.getElementById('notification-btn');
@@ -60,6 +65,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     let currentTaskId = null; // For editing/deleting
     let tasksUnsubscribe = null;
     let pendingDeleteAction = null;
+    let boards = []; // Store boards locally for mobile selector
 
     // Auth Check & Data Loading
     onAuthStateChanged(auth, async (user) => {
@@ -77,6 +83,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
             if (boardId) selectBoard(boardId);
 
             if(loadingOverlay) loadingOverlay.classList.add('hidden');
+            
+            initSortable();
         }
     });
 
@@ -134,6 +142,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     }
 
     function renderBoard(board) {
+        // Sidebar Item
         const firstLetter = board.name.charAt(0).toUpperCase();
         const boardItem = document.createElement('a');
         boardItem.href = `?boardId=${board.id}`;
@@ -161,27 +170,47 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
         boardList.appendChild(boardItem);
 
-        // Mobile Board List
-        if(mobileBoardList) {
-            const mobileItem = boardItem.cloneNode(true);
-            mobileItem.className = 'flex items-center gap-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100';
-            mobileItem.innerHTML = `<div class="p-2 bg-indigo-50 rounded-lg text-indigo-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg></div><span class="font-semibold text-gray-800 text-lg"></span>`;
-            mobileItem.querySelector('span').textContent = board.name;
-            mobileBoardList.appendChild(mobileItem);
+        // Mobile Dropdown Item
+        if(mobileBoardDropdownList) {
+            const mobileItem = document.createElement('button');
+            mobileItem.className = `w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${board.id === currentBoardId ? 'bg-indigo-50 text-indigo-600' : 'text-gray-700 hover:bg-gray-50'}`;
+            mobileItem.innerHTML = `
+                <div class="w-5 h-5 rounded bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold">${firstLetter}</div>
+                <span class="truncate">${board.name}</span>
+            `;
+            mobileItem.addEventListener('click', () => {
+                selectBoard(board.id);
+                mobileBoardDropdown.classList.add('hidden');
+            });
+            mobileBoardDropdownList.appendChild(mobileItem);
         }
     }
 
     function listenForBoards(userId) {
         const q = query(collection(db, "boards"), where("ownerId", "==", userId));
         onSnapshot(q, (querySnapshot) => {
+            boards = [];
             boardList.innerHTML = ''; // Clear list before re-rendering
-            if(mobileBoardList) mobileBoardList.innerHTML = '';
+            if(mobileBoardDropdownList) mobileBoardDropdownList.innerHTML = '';
+            
             if (querySnapshot.empty) {
                 boardList.innerHTML = `<p class="px-2 text-xs text-gray-500">No boards yet. Create one!</p>`;
             } else {
                 querySnapshot.forEach((doc) => {
-                    renderBoard({ id: doc.id, ...doc.data() });
+                    const boardData = { id: doc.id, ...doc.data() };
+                    boards.push(boardData);
+                    renderBoard(boardData);
                 });
+
+                // Auto-select first board if none selected
+                if (!currentBoardId && boards.length > 0) {
+                    selectBoard(boards[0].id);
+                }
+                
+                // Re-render to update active states if needed
+                if (currentBoardId) {
+                    // This is handled by selectBoard updating UI, but we need to ensure dropdown is current
+                }
             }
         });
     }
@@ -215,6 +244,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
             const boardSnap = await getDoc(boardRef);
             if (boardSnap.exists() && boardTitleEl) {
                 boardTitleEl.textContent = boardSnap.data().name;
+                if(mobileBoardTitleText) mobileBoardTitleText.textContent = boardSnap.data().name;
             }
         } catch (error) {
             console.error("Error fetching board details:", error);
@@ -225,13 +255,33 @@ const loadingOverlay = document.getElementById('loading-overlay');
         
         // Switch to home view on mobile if needed
         showPage('home-section');
+        
+        // Re-render boards to update mobile dropdown active state
+        if(boards.length > 0) {
+            if(mobileBoardDropdownList) mobileBoardDropdownList.innerHTML = '';
+            boards.forEach(b => {
+                // Re-use render logic or just manual append for mobile to keep it simple
+                const firstLetter = b.name.charAt(0).toUpperCase();
+                const mobileItem = document.createElement('button');
+                mobileItem.className = `w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${b.id === currentBoardId ? 'bg-indigo-50 text-indigo-600' : 'text-gray-700 hover:bg-gray-50'}`;
+                mobileItem.innerHTML = `
+                    <div class="w-5 h-5 rounded bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold">${firstLetter}</div>
+                    <span class="truncate">${b.name}</span>
+                `;
+                mobileItem.addEventListener('click', () => {
+                    selectBoard(b.id);
+                    mobileBoardDropdown.classList.add('hidden');
+                });
+                mobileBoardDropdownList.appendChild(mobileItem);
+            });
+        }
     }
 
     // Task Creation & Management
     function createTaskCard(task) {
         const taskCard = document.createElement('div');
         taskCard.className = 'task-card group relative p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 hover:shadow-md transition-all';
-        taskCard.draggable = true; // For future drag-and-drop
+        // taskCard.draggable = true; // Handled by SortableJS
         taskCard.dataset.taskId = task.id;
         
         const p = document.createElement('p');
@@ -277,16 +327,6 @@ const loadingOverlay = document.getElementById('loading-overlay');
             openTaskDetail(task);
         });
 
-        // Drag Events
-        taskCard.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('text/plain', task.id);
-            e.dataTransfer.effectAllowed = 'move';
-            taskCard.classList.add('opacity-50');
-        });
-
-        taskCard.addEventListener('dragend', () => {
-            taskCard.classList.remove('opacity-50');
-        });
 
         return taskCard;
     }
@@ -355,34 +395,33 @@ const loadingOverlay = document.getElementById('loading-overlay');
         openModal(confirmModal);
     }
 
-    // Drag and Drop Logic for Columns
-    const columns = [todoList, inprogressList, doneList];
-    columns.forEach(col => {
-        col.addEventListener('dragover', (e) => {
-            e.preventDefault(); // Allow drop
-            col.classList.add('bg-indigo-50', 'ring-2', 'ring-indigo-300', 'ring-inset');
-        });
+    // Initialize SortableJS
+    function initSortable() {
+        const columns = [todoList, inprogressList, doneList];
+        columns.forEach(col => {
+            new Sortable(col, {
+                group: 'shared', // set both lists to same group
+                animation: 150,
+                ghostClass: 'bg-indigo-50',
+                delay: 100, // slight delay to prevent accidental drags on touch
+                delayOnTouchOnly: true,
+                onEnd: async function (evt) {
+                    const itemEl = evt.item;
+                    const newStatus = evt.to.dataset.status;
+                    const taskId = itemEl.dataset.taskId;
 
-        col.addEventListener('dragleave', () => {
-            col.classList.remove('bg-indigo-50', 'ring-2', 'ring-indigo-300', 'ring-inset');
-        });
-
-        col.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            col.classList.remove('bg-indigo-50', 'ring-2', 'ring-indigo-300', 'ring-inset');
-            const taskId = e.dataTransfer.getData('text/plain');
-            const newStatus = col.dataset.status;
-
-            if (taskId && newStatus) {
-                try {
-                    const taskRef = doc(db, "tasks", taskId);
-                    await updateDoc(taskRef, { status: newStatus });
-                } catch (error) {
-                    console.error("Error moving task:", error);
+                    if (taskId && newStatus) {
+                        try {
+                            const taskRef = doc(db, "tasks", taskId);
+                            await updateDoc(taskRef, { status: newStatus });
+                        } catch (error) {
+                            console.error("Error moving task:", error);
+                        }
+                    }
                 }
-            }
+            });
         });
-    });
+    }
 
     function listenForTasks(boardId) {
         if (tasksUnsubscribe) tasksUnsubscribe(); // Unsubscribe from previous listener
@@ -417,7 +456,6 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
     // Event Listeners
     if (createBoardBtn) createBoardBtn.addEventListener('click', () => openModal(createBoardModal));
-    if (mobileCreateBoardBtn) mobileCreateBoardBtn.addEventListener('click', () => openModal(createBoardModal));
     if (cancelBoardBtn) cancelBoardBtn.addEventListener('click', () => closeModal(createBoardModal));
     if (confirmCreateBoardBtn) confirmCreateBoardBtn.addEventListener('click', handleCreateBoard);
     if (cancelEditBoardBtn) cancelEditBoardBtn.addEventListener('click', () => closeModal(editBoardModal));
@@ -437,18 +475,23 @@ const loadingOverlay = document.getElementById('loading-overlay');
         if (currentTaskId) confirmDeleteTask(currentTaskId);
     });
     
-    // Keyboard Accessibility for Create Board
-    if (newBoardNameInput) {
-        newBoardNameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') handleCreateBoard(e);
-        });
+    // Helper for Enter Key
+    function addEnterListener(input, action) {
+        if (input) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    action(e);
+                }
+            });
+        }
     }
-    // Keyboard Accessibility for Add Task
-    if (newTaskTitleInput) {
-        newTaskTitleInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') handleAddTask(e);
-        });
-    }
+
+    addEnterListener(newBoardNameInput, handleCreateBoard);
+    addEnterListener(newTaskTitleInput, handleAddTask);
+    // For textarea, usually Shift+Enter is new line, Enter is submit. 
+    // But for description, maybe let Enter be new line. 
+    // Let's stick to Title for Enter submission to avoid bad UX in textarea.
 
     // Sidebar Toggle Logic
     const sidebar = document.getElementById('sidebar');
@@ -504,6 +547,20 @@ const loadingOverlay = document.getElementById('loading-overlay');
         });
     });
 
+    // Mobile Board Selector Logic
+    if (mobileBoardSelectBtn) {
+        mobileBoardSelectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mobileBoardDropdown.classList.toggle('hidden');
+        });
+    }
+    if (mobileDropdownCreateBtn) {
+        mobileDropdownCreateBtn.addEventListener('click', () => {
+            mobileBoardDropdown.classList.add('hidden');
+            openModal(createBoardModal);
+        });
+    }
+
     if (cancelAddTaskBtn) cancelAddTaskBtn.addEventListener('click', () => closeModal(addTaskModal));
     if (confirmAddTaskBtn) confirmAddTaskBtn.addEventListener('click', handleAddTask);
     if (closeModalBtn) closeModalBtn.addEventListener('click', () => closeModal(taskModal));
@@ -522,6 +579,9 @@ const loadingOverlay = document.getElementById('loading-overlay');
         }
         if (notificationBtn && !notificationBtn.contains(e.target) && notificationDropdown && !notificationDropdown.classList.contains('hidden')) {
             notificationDropdown.classList.add('hidden');
+        }
+        if (mobileBoardSelectBtn && !mobileBoardSelectBtn.contains(e.target) && mobileBoardDropdown && !mobileBoardDropdown.classList.contains('hidden')) {
+            mobileBoardDropdown.classList.add('hidden');
         }
         if (e.target === createBoardModal) closeModal(createBoardModal);
         if (e.target === addTaskModal) closeModal(addTaskModal);
