@@ -8,6 +8,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const createBoardModal = document.getElementById('create-board-modal');
     const addTaskModal = document.getElementById('add-task-modal');
     const taskModal = document.getElementById('task-modal');
+    const editTaskModal = document.getElementById('edit-task-modal');
+    const editCommentModal = document.getElementById('edit-comment-modal');
     const editBoardModal = document.getElementById('edit-board-modal');
     const alertModal = document.getElementById('alert-modal');
     const confirmModal = document.getElementById('confirm-modal');
@@ -27,16 +29,23 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const newTaskLabelInput = document.getElementById('new-task-label');
 
     const closeModalBtn = document.getElementById('close-modal-btn');
-    const modalTaskTitleInput = document.getElementById('modal-task-title');
-    const deleteTaskBtn = document.getElementById('delete-task-btn');
-    const editTaskBtn = document.getElementById('edit-task-btn');
-    const saveTaskBtn = document.getElementById('save-task-btn');
+    const viewDeleteBtn = document.getElementById('view-delete-btn');
+    const viewEditBtn = document.getElementById('view-edit-btn');
+    
+    // Edit Task Modal Inputs
+    const editTaskTitleInput = document.getElementById('edit-task-title');
+    const editTaskDescInput = document.getElementById('edit-task-desc');
+    const editTaskDateInput = document.getElementById('edit-task-date');
+    const editTaskLabelInput = document.getElementById('edit-task-label');
+    const cancelEditTaskBtn = document.getElementById('cancel-edit-task-btn');
+    const saveEditTaskBtn = document.getElementById('save-edit-task-btn');
+
     const cancelEditBoardBtn = document.getElementById('cancel-edit-board-btn');
     const closeAlertBtn = document.getElementById('close-alert-btn');
     const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
     const confirmOkBtn = document.getElementById('confirm-ok-btn');
     
-    const modalTitle = document.getElementById('modal-title');
+    // Comment Elements
     const modalTaskComments = document.getElementById('modal-task-comments');
     const modalCommentInput = document.getElementById('modal-comment-input');
     const postCommentBtn = document.getElementById('post-comment-btn');
@@ -81,6 +90,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     let boards = []; // Store boards locally for mobile selector
     let allTasks = []; // Store all tasks for client-side filtering
     let commentsUnsubscribe = null;
+    let currentCommentId = null; // For editing comments
 
     // Auth Check & Data Loading
     onAuthStateChanged(auth, async (user) => {
@@ -321,22 +331,13 @@ const loadingOverlay = document.getElementById('loading-overlay');
         const actionsDiv = document.createElement('div');
         actionsDiv.className = "absolute top-2 right-2 hidden md:group-hover:flex gap-1 bg-white rounded shadow-sm p-1";
         actionsDiv.innerHTML = `
-            <button class="p-1 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100" title="Edit">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-            </button>
             <button class="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100" title="Delete">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             </button>
         `;
         
-        // Edit Action
-        actionsDiv.children[0].addEventListener('click', (e) => {
-            e.stopPropagation();
-            openTaskDetail(task);
-        });
-
         // Delete Action
-        actionsDiv.children[1].addEventListener('click', (e) => {
+        actionsDiv.children[0].addEventListener('click', (e) => {
             e.stopPropagation();
             confirmDeleteTask(task.id);
         });
@@ -391,47 +392,56 @@ const loadingOverlay = document.getElementById('loading-overlay');
         }
     }
 
-    function setModalMode(mode) {
-        const isView = mode === 'view';
-        
-        if (modalTitle) modalTitle.textContent = isView ? 'Task Details' : 'Edit Task';
-
-        // Toggle Inputs
-        if(modalTaskTitleInput) modalTaskTitleInput.disabled = isView;
-        if(document.getElementById('modal-task-desc')) document.getElementById('modal-task-desc').disabled = isView;
-        if(document.getElementById('modal-task-duedate')) document.getElementById('modal-task-duedate').disabled = isView;
-        if(document.getElementById('modal-task-label')) document.getElementById('modal-task-label').disabled = isView;
-        
-        // Toggle Buttons
-        if (isView) {
-            if(editTaskBtn) editTaskBtn.classList.remove('hidden');
-            if(saveTaskBtn) saveTaskBtn.classList.add('hidden');
-        } else {
-            if(editTaskBtn) editTaskBtn.classList.add('hidden');
-            if(saveTaskBtn) saveTaskBtn.classList.remove('hidden');
-        }
-    }
-
     function openTaskDetail(task) {
         currentTaskId = task.id;
-        modalTaskTitleInput.value = task.title;
-        // Populate other fields if they exist in modal
-        if(document.getElementById('modal-task-desc')) document.getElementById('modal-task-desc').value = task.description || '';
-        if(document.getElementById('modal-task-duedate')) document.getElementById('modal-task-duedate').value = task.dueDate || '';
-        if(document.getElementById('modal-task-label')) document.getElementById('modal-task-label').value = task.label || '';
         
-        setModalMode('view');
+        // Populate View Modal
+        document.getElementById('view-task-title').textContent = task.title;
+        document.getElementById('view-task-desc').textContent = task.description || 'No description provided.';
+        
+        const labelEl = document.getElementById('view-task-label');
+        if (task.label) {
+            labelEl.textContent = task.label;
+            labelEl.classList.remove('hidden');
+            labelEl.className = "px-2 py-0.5 rounded-full font-medium text-xs bg-indigo-100 text-indigo-700";
+        } else {
+            labelEl.classList.add('hidden');
+        }
+
+        const dateEl = document.getElementById('view-task-duedate');
+        if (task.dueDate) {
+            dateEl.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg> ${task.dueDate}`;
+        } else {
+            dateEl.textContent = '';
+        }
+        
         listenForComments(task.id);
         openModal(taskModal);
     }
 
-    async function handleSaveTask() {
+    function openEditTaskModal() {
+        // Get current task data from local array
+        const task = allTasks.find(t => t.id === currentTaskId);
+        if (!task) return;
+
+        editTaskTitleInput.value = task.title;
+        editTaskDescInput.value = task.description || '';
+        editTaskDateInput.value = task.dueDate || '';
+        editTaskLabelInput.value = task.label || '';
+
+        closeModal(taskModal);
+        openModal(editTaskModal);
+    }
+
+    async function handleSaveEditedTask() {
         if (!currentTaskId) return;
         
-        const title = modalTaskTitleInput.value;
-        const desc = document.getElementById('modal-task-desc').value;
-        const date = document.getElementById('modal-task-duedate').value;
-        const label = document.getElementById('modal-task-label').value;
+        const title = editTaskTitleInput.value.trim();
+        if (!title) return;
+
+        const desc = editTaskDescInput.value.trim();
+        const date = editTaskDateInput.value;
+        const label = editTaskLabelInput.value;
         
         try {
             const taskRef = doc(db, "tasks", currentTaskId);
@@ -441,7 +451,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 dueDate: date,
                 label: label
             });
-            closeModal(taskModal);
+            closeModal(editTaskModal);
         } catch (e) {
             console.error("Error updating task", e);
             alert("Failed to save task.");
@@ -480,7 +490,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
             }
             
             snapshot.forEach(doc => {
-                renderComment(doc.data());
+                renderComment({ id: doc.id, ...doc.data() });
             });
             // Scroll to bottom
             modalTaskComments.scrollTop = modalTaskComments.scrollHeight;
@@ -489,7 +499,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
     function renderComment(comment) {
         const div = document.createElement('div');
-        div.className = "bg-gray-50 rounded-lg p-2 text-sm border border-gray-100";
+        div.className = "group relative bg-gray-50 rounded-lg p-2 text-sm border border-gray-100 hover:bg-gray-100 transition-colors";
         
         const header = document.createElement('div');
         header.className = "flex justify-between items-center mb-1";
@@ -512,11 +522,64 @@ const loadingOverlay = document.getElementById('loading-overlay');
         textP.className = "text-gray-700 text-xs break-words";
         textP.textContent = comment.text;
         
+        // Comment Actions (Edit/Delete)
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = "absolute top-1 right-1 hidden group-hover:flex gap-1 bg-white rounded shadow-sm p-0.5";
+        actionsDiv.innerHTML = `
+            <button class="p-1 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100" title="Edit">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+            </button>
+            <button class="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100" title="Delete">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+        `;
+
+        // Edit Comment
+        actionsDiv.children[0].addEventListener('click', () => {
+            currentCommentId = comment.id;
+            document.getElementById('edit-comment-text').value = comment.text;
+            openModal(editCommentModal);
+        });
+
+        // Delete Comment
+        actionsDiv.children[1].addEventListener('click', () => {
+            pendingDeleteAction = async () => {
+                try {
+                    await deleteDoc(doc(db, "comments", comment.id));
+                    closeModal(confirmModal);
+                } catch (error) {
+                    console.error("Error deleting comment:", error);
+                }
+            };
+            openModal(confirmModal);
+        });
+
+        div.appendChild(actionsDiv);
         div.appendChild(header);
         div.appendChild(textP);
         
         modalTaskComments.appendChild(div);
     }
+
+    // Handle Edit Comment Save
+    const saveEditCommentBtn = document.getElementById('save-edit-comment-btn');
+    const cancelEditCommentBtn = document.getElementById('cancel-edit-comment-btn');
+    
+    if(saveEditCommentBtn) {
+        saveEditCommentBtn.addEventListener('click', async () => {
+            const newText = document.getElementById('edit-comment-text').value.trim();
+            if (!newText || !currentCommentId) return;
+            
+            try {
+                await updateDoc(doc(db, "comments", currentCommentId), { text: newText });
+                closeModal(editCommentModal);
+            } catch (error) {
+                console.error("Error updating comment:", error);
+            }
+        });
+    }
+    
+    if(cancelEditCommentBtn) cancelEditCommentBtn.addEventListener('click', () => closeModal(editCommentModal));
 
     async function handlePostComment() {
         const text = modalCommentInput.value.trim();
@@ -658,11 +721,13 @@ const loadingOverlay = document.getElementById('loading-overlay');
     }
 
     // Task Modal Actions
-    if (deleteTaskBtn) deleteTaskBtn.addEventListener('click', () => {
+    if (viewDeleteBtn) viewDeleteBtn.addEventListener('click', () => {
         if (currentTaskId) confirmDeleteTask(currentTaskId);
     });
-    if (editTaskBtn) editTaskBtn.addEventListener('click', () => setModalMode('edit'));
-    if (saveTaskBtn) saveTaskBtn.addEventListener('click', handleSaveTask);
+    if (viewEditBtn) viewEditBtn.addEventListener('click', openEditTaskModal);
+    
+    if (cancelEditTaskBtn) cancelEditTaskBtn.addEventListener('click', () => closeModal(editTaskModal));
+    if (saveEditTaskBtn) saveEditTaskBtn.addEventListener('click', handleSaveEditedTask);
     
     if (postCommentBtn) postCommentBtn.addEventListener('click', handlePostComment);
     addEnterListener(modalCommentInput, handlePostComment);
@@ -778,6 +843,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
         if (e.target === createBoardModal) closeModal(createBoardModal);
         if (e.target === addTaskModal) closeModal(addTaskModal);
         if (e.target === taskModal) closeModal(taskModal);
+        if (e.target === editTaskModal) closeModal(editTaskModal);
+        if (e.target === editCommentModal) closeModal(editCommentModal);
         if (e.target === confirmModal) closeModal(confirmModal);
     });
 
