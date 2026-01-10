@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy, limit, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const loadingOverlay = document.getElementById('loading-overlay');
 
@@ -279,15 +279,32 @@ const loadingOverlay = document.getElementById('loading-overlay');
             document.getElementById(`delete-board-${board.id}`).addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 dropdown.remove();
-                // Reuse confirm modal logic
+                
                 pendingDeleteAction = async () => {
-                    await deleteDoc(doc(db, "boards", board.id));
-                    logActivity('Deleted Board', `Deleted board "${board.name}"`);
-                    closeModal(confirmModal);
-                    if (currentBoardId === board.id) {
-                        currentBoardId = null;
-                        boardList.innerHTML = '';
-                        // Reset view
+                    try {
+                        // Delete associated tasks first
+                        const batch = writeBatch(db);
+                        const tasksQuery = query(collection(db, "tasks"), where("boardId", "==", board.id));
+                        const tasksSnap = await getDocs(tasksQuery);
+                        tasksSnap.forEach((t) => batch.delete(t.ref));
+                        
+                        // Delete board
+                        batch.delete(doc(db, "boards", board.id));
+                        await batch.commit();
+
+                        logActivity('Deleted Board', `Deleted board "${board.name}"`);
+                        closeModal(confirmModal);
+                        
+                        if (currentBoardId === board.id) {
+                            currentBoardId = null;
+                            if(boardTitleEl) boardTitleEl.textContent = 'Select a Board';
+                            if(mobileBoardTitleText) mobileBoardTitleText.textContent = 'Select Board';
+                            allTasks = [];
+                            renderTasks([]);
+                        }
+                    } catch (error) {
+                        console.error("Error deleting board:", error);
+                        alert("Failed to delete board.");
                     }
                 };
                 openModal(confirmModal);
@@ -327,7 +344,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
     }
 
     function listenForBoards(userId) {
-        // Ensure query is defined and imported correctly
+        if (!userId) return;
+        
         const q = query(collection(db, "boards"), where("ownerId", "==", userId), orderBy("isPinned", "desc"), orderBy("createdAt", "desc"));
         onSnapshot(q, (querySnapshot) => {
             boards = [];
@@ -826,7 +844,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
             Array.from(select.options).forEach(opt => {
                 if (opt.value === "") return;
                 if (counts.hasOwnProperty(opt.value)) {
-                    opt.textContent = `${opt.value} (${counts[opt.value]})`;
+                    const label = opt.value.replace(' Priority', '');
+                    opt.textContent = `${label} (${counts[opt.value]})`;
                 }
             });
         };
