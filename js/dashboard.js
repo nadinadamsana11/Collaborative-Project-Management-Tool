@@ -1,5 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const loadingOverlay = document.getElementById('loading-overlay');
 
@@ -39,6 +40,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const cancelEditTaskBtn = document.getElementById('cancel-edit-task-btn');
     const saveEditTaskBtn = document.getElementById('save-edit-task-btn');
 
+    const confirmEditBoardBtn = document.getElementById('confirm-edit-board-btn');
     const cancelEditBoardBtn = document.getElementById('cancel-edit-board-btn');
     const closeAlertBtn = document.getElementById('close-alert-btn');
     const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
@@ -98,6 +100,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     let commentsUnsubscribe = null;
     let currentCommentId = null; // For editing comments
     let commentLimit = 3;
+    let editingBoardId = null;
 
     // Auth Check & Data Loading
     onAuthStateChanged(auth, async (user) => {
@@ -249,6 +252,9 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 <button class="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 flex items-center gap-2" id="pin-board-${board.id}">
                     ${board.isPinned ? 'Unpin' : 'Pin'}
                 </button>
+                <button class="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 flex items-center gap-2" id="edit-board-${board.id}">
+                    Edit
+                </button>
                 <button class="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-gray-100 flex items-center gap-2" id="delete-board-${board.id}">
                     Delete
                 </button>
@@ -259,6 +265,15 @@ const loadingOverlay = document.getElementById('loading-overlay');
             document.getElementById(`pin-board-${board.id}`).addEventListener('click', async (ev) => {
                 ev.stopPropagation();
                 await updateDoc(doc(db, "boards", board.id), { isPinned: !board.isPinned });
+                logActivity(board.isPinned ? 'Unpinned Board' : 'Pinned Board', `Updated board "${board.name}"`);
+                dropdown.remove();
+            });
+
+            document.getElementById(`edit-board-${board.id}`).addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                editingBoardId = board.id;
+                document.getElementById('edit-board-name').value = board.name;
+                openModal(editBoardModal);
                 dropdown.remove();
             });
 
@@ -313,10 +328,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     }
 
     function listenForBoards(userId) {
-        // Note: orderBy with where requires an index. If index is missing, this might fail.
-        // We will try to sort client-side to be safe if index creation is an issue for the user.
-        // But requirement says "Use Firestore ... orderBy for pinned boards".
-        // We will use orderBy. If it fails, check console for index link.
+        // Ensure query is defined and imported correctly
         const q = query(collection(db, "boards"), where("ownerId", "==", userId), orderBy("isPinned", "desc"), orderBy("createdAt", "desc"));
         onSnapshot(q, (querySnapshot) => {
             boards = [];
@@ -404,6 +416,20 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 });
                 mobileBoardDropdownList.appendChild(mobileItem);
             });
+        }
+    }
+
+    // Edit Board Logic
+    async function handleEditBoard() {
+        const newName = document.getElementById('edit-board-name').value.trim();
+        if (!newName || !editingBoardId) return;
+        
+        try {
+            await updateDoc(doc(db, "boards", editingBoardId), { name: newName });
+            logActivity('Edited Board', `Renamed board to "${newName}"`);
+            closeModal(editBoardModal);
+        } catch (error) {
+            console.error("Error updating board:", error);
         }
     }
 
@@ -551,6 +577,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 dueDate: date,
                 label: label
             });
+            logActivity('Edited Task', `Updated task "${title}"`);
             closeModal(editTaskModal);
         } catch (e) {
             console.error("Error updating task", e);
@@ -580,7 +607,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
         const q = query(
             collection(db, "comments"), 
             where("taskId", "==", taskId),
-            orderBy("createdAt", "asc"),
+            orderBy("createdAt", "desc"), // Newest first as requested
             limit(commentLimit + 1) // Fetch one extra to check if "See More" is needed
         );
 
@@ -692,6 +719,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
             
             try {
                 await updateDoc(doc(db, "comments", currentCommentId), { text: newText });
+                logActivity('Edited Comment', 'Updated a comment');
                 closeModal(editCommentModal);
             } catch (error) {
                 console.error("Error updating comment:", error);
@@ -855,6 +883,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     if (cancelBoardBtn) cancelBoardBtn.addEventListener('click', () => closeModal(createBoardModal));
     if (confirmCreateBoardBtn) confirmCreateBoardBtn.addEventListener('click', handleCreateBoard);
     if (cancelEditBoardBtn) cancelEditBoardBtn.addEventListener('click', () => closeModal(editBoardModal));
+    if (confirmEditBoardBtn) confirmEditBoardBtn.addEventListener('click', handleEditBoard);
     if (closeAlertBtn) closeAlertBtn.addEventListener('click', () => closeModal(alertModal));
     
     // Confirmation Modal
