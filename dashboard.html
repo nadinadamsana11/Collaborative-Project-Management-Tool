@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ProjectFlow - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 h-screen flex overflow-hidden">
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-100 z-50 flex items-center justify-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+    </div>
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col transition-all duration-300 z-20">
+        <div id="sidebar-header" class="h-16 flex items-center justify-between px-4 border-b border-gray-200">
+            <div class="flex items-center gap-2 text-indigo-600 overflow-hidden">
+                <svg class="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+                <span id="sidebar-logo-text" class="text-xl font-bold whitespace-nowrap transition-opacity duration-300">ProjectFlow</span>
+            </div>
+            <button id="sidebar-toggle-btn" class="text-gray-400 hover:text-gray-600 focus:outline-none">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+            </button>
+        </div>
+        
+        <div class="p-4 space-y-6 overflow-y-auto flex-1">
+            <div>
+                <div id="sidebar-boards-header" class="flex items-center justify-between mb-2 px-2 h-6">
+                    <h3 id="sidebar-boards-label" class="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap overflow-hidden transition-opacity duration-300">Your Boards</h3>
+                    <button id="create-board-btn" class="text-gray-400 hover:text-indigo-600 transition-colors" title="Create Board">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </button>
+                </div>
+                <nav id="board-list" class="space-y-1">
+                    <!-- Dynamic Boards -->
+                </nav>
+            </div>
+        </div>
+
+        <!-- User Profile (Bottom) -->
+        <div class="border-t border-gray-200 p-4 relative">
+            <div id="user-profile-btn" class="flex items-center gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors">
+                <div id="user-avatar" class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm flex-shrink-0">
+                    <!-- Initials -->
+                </div>
+                <div id="user-info" class="flex-1 min-w-0 transition-opacity duration-300">
+                    <p id="user-name" class="text-sm font-medium text-gray-900 truncate">Loading...</p>
+                    <p id="user-email" class="text-xs text-gray-500 truncate">...</p>
+                </div>
+            </div>
+
+            <!-- Custom Logout Dropdown -->
+            <div id="profile-dropdown" class="hidden absolute bottom-full left-4 w-56 mb-2 bg-white rounded-md shadow-lg border border-gray-200 z-20">
+                <div class="py-1">
+                    <button id="logout-btn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col min-w-0 bg-white pb-16 md:pb-0 relative">
+        <!-- Top Navbar -->
+        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-10">
+            <div class="flex items-center gap-6">
+                <h2 class="text-lg font-bold text-gray-900">Product Roadmap</h2>
+                <div class="hidden md:flex items-center gap-3">
+                    <input type="text" id="search-input" placeholder="Search tasks..." class="w-64 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <select id="filter-select" class="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                        <option value="">All Labels</option>
+                        <option value="High Priority">High Priority</option>
+                        <option value="Medium Priority">Medium Priority</option>
+                        <option value="Low Priority">Low Priority</option>
+                        <option value="Bug">Bug</option>
+                        <option value="Feature">Feature</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <!-- Notification Bell -->
+                <div class="relative">
+                    <button id="notification-btn" class="text-gray-500 hover:text-gray-700 relative focus:outline-none">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                        <span id="notification-badge" class="hidden absolute top-0 right-0 block h-2 w-2 rounded-full ring-2 ring-white bg-red-500"></span>
+                    </button>
+                    <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200 max-h-96 overflow-y-auto">
+                        <div class="px-4 py-2 border-b border-gray-100 font-semibold text-sm text-gray-700">Notifications</div>
+                        <div id="notification-list">
+                            <!-- Notifications will be injected here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- PAGE: HOME (Board Canvas) -->
+        <div id="home-section" class="page-section flex-1 flex flex-col h-full overflow-hidden">
+            <main class="flex-1 overflow-x-auto overflow-y-hidden bg-gray-100 p-4 md:p-6">
+            <div class="h-full flex items-start space-x-6">
+                
+                <!-- Column 1: To Do -->
+                <div class="w-80 flex-shrink-0 bg-gray-50 rounded-xl border border-gray-200 flex flex-col max-h-full shadow-sm">
+                    <div class="p-4 flex items-center justify-between border-b border-gray-100">
+                        <h3 class="font-semibold text-gray-700">To Do</h3>
+                        <span id="todo-count" class="bg-gray-200 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">0</span>
+                    </div>
+                    <div id="todo-list" class="p-3 flex-1 overflow-y-auto space-y-3 min-h-[100px]">
+                        <!-- Tasks will be injected here -->
+                    </div>
+                    <div class="p-3 border-t border-gray-100">
+                        <button data-status="todo" class="add-card-btn w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">
+                            + Add a Card
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Column 2: In Progress -->
+                <div class="w-80 flex-shrink-0 bg-gray-50 rounded-xl border border-gray-200 flex flex-col max-h-full shadow-sm">
+                    <div class="p-4 flex items-center justify-between border-b border-gray-100">
+                        <h3 class="font-semibold text-gray-700">In Progress</h3>
+                        <span id="inprogress-count" class="bg-indigo-100 text-indigo-600 text-xs font-medium px-2 py-0.5 rounded-full">0</span>
+                    </div>
+                    <div id="inprogress-list" class="p-3 flex-1 overflow-y-auto space-y-3 min-h-[100px]">
+                        <!-- Tasks will be injected here -->
+                    </div>
+                    <div class="p-3 border-t border-gray-100">
+                        <button data-status="inprogress" class="add-card-btn w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">
+                            + Add a Card
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Column 3: Done -->
+                <div class="w-80 flex-shrink-0 bg-gray-50 rounded-xl border border-gray-200 flex flex-col max-h-full shadow-sm">
+                    <div class="p-4 flex items-center justify-between border-b border-gray-100">
+                        <h3 class="font-semibold text-gray-700">Done</h3>
+                        <span id="done-count" class="bg-green-100 text-green-600 text-xs font-medium px-2 py-0.5 rounded-full">0</span>
+                    </div>
+                    <div id="done-list" class="p-3 flex-1 overflow-y-auto space-y-3 min-h-[100px]">
+                        <!-- Tasks will be injected here -->
+                    </div>
+                    <div class="p-3 border-t border-gray-100">
+                        <button data-status="done" class="add-card-btn w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">
+                            + Add a Card
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Add List Button -->
+                <div class="w-80 flex-shrink-0">
+                    <button class="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-medium hover:border-indigo-500 hover:text-indigo-600 transition-colors">
+                        + Add Another List
+                    </button>
+                </div>
+
+            </div>
+            </main>
+        </div>
+
+        <!-- PAGE: BOARDS (Mobile Only View) -->
+        <div id="boards-section" class="page-section hidden flex-1 bg-gray-50 p-4 overflow-y-auto">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Your Boards</h2>
+            <div id="mobile-board-list" class="space-y-3">
+                <!-- Mobile boards injected here -->
+            </div>
+            <button id="mobile-create-board-btn" class="mt-6 w-full py-3 bg-indigo-600 text-white rounded-xl font-medium shadow-lg">
+                Create New Board
+            </button>
+        </div>
+
+        <!-- PAGE: NOTIFICATIONS (Mobile Only View) -->
+        <div id="notifications-section" class="page-section hidden flex-1 bg-white p-4 overflow-y-auto">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Notifications</h2>
+            <div id="mobile-notification-list" class="space-y-4">
+                <p class="text-gray-500 text-center py-8">No new notifications.</p>
+            </div>
+        </div>
+
+        <!-- PAGE: PROFILE (Mobile Only View) -->
+        <div id="profile-section" class="page-section hidden flex-1 bg-gray-50 p-4 overflow-y-auto">
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 text-center mb-6">
+                <div id="mobile-user-avatar" class="h-20 w-20 rounded-full bg-indigo-100 mx-auto flex items-center justify-center text-indigo-600 font-bold text-2xl mb-4">U</div>
+                <h2 id="mobile-user-name" class="text-xl font-bold text-gray-900">User Name</h2>
+                <p id="mobile-user-email" class="text-gray-500">user@example.com</p>
+            </div>
+            <button id="mobile-logout-btn" class="w-full py-3 bg-white border border-red-100 text-red-600 font-medium rounded-xl shadow-sm hover:bg-red-50">
+                Log Out
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Bottom Navigation (Mobile Only) -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-30 pb-safe">
+        <button type="button" class="nav-btn active text-indigo-600 flex flex-col items-center gap-1 w-full h-full justify-center" data-target="home-section">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+            <span class="text-[10px] font-medium">Board</span>
+        </button>
+        <button type="button" class="nav-btn text-gray-400 hover:text-gray-600 flex flex-col items-center gap-1 w-full h-full justify-center" data-target="boards-section">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+            <span class="text-[10px] font-medium">Boards</span>
+        </button>
+        <button type="button" class="nav-btn text-gray-400 hover:text-gray-600 flex flex-col items-center gap-1 w-full h-full justify-center" data-target="notifications-section">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+            <span class="text-[10px] font-medium">Alerts</span>
+        </button>
+        <button type="button" class="nav-btn text-gray-400 hover:text-gray-600 flex flex-col items-center gap-1 w-full h-full justify-center" data-target="profile-section">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+            <span class="text-[10px] font-medium">Profile</span>
+        </button>
+    </nav>
+
+    <!-- Dashboard Logic -->
+    <script type="module" src="js/dashboard.js"></script>
+
+    <!-- Task Detail Modal -->
+    <div id="task-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden h-full w-full flex items-end md:items-center justify-center z-50 transition-opacity">
+        <div class="relative p-6 w-full md:max-w-md bg-white shadow-xl rounded-t-2xl md:rounded-xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center pb-4 border-b border-gray-100">
+                <h3 class="text-lg font-bold text-gray-900">Edit Task</h3>
+                <button id="close-modal-btn" class="text-gray-400 hover:text-gray-500 transition-colors">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="mt-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                    <input type="text" id="modal-task-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea id="modal-task-desc" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm" placeholder="Add a more detailed description..."></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Label</label>
+                    <select id="modal-task-label" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm bg-white">
+                        <option value="">No Label</option>
+                        <option value="High Priority">High Priority</option>
+                        <option value="Medium Priority">Medium Priority</option>
+                        <option value="Low Priority">Low Priority</option>
+                        <option value="Bug">Bug</option>
+                        <option value="Feature">Feature</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                    <input type="date" id="modal-task-duedate" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
+                    <div id="modal-task-assigned" class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 truncate"></div>
+                </div>
+
+                <!-- Activity Log -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Activity Log</label>
+                    <div id="modal-task-activity" class="bg-gray-50 rounded-lg p-3 text-xs text-gray-600 space-y-2 max-h-32 overflow-y-auto border border-gray-200">
+                        <p class="text-gray-400 italic">No activity yet.</p>
+                    </div>
+                </div>
+
+                <!-- Comments -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Comments</label>
+                    <div id="modal-task-comments" class="space-y-3 mb-3 max-h-40 overflow-y-auto p-1"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="modal-comment-input" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Write a comment...">
+                        <button id="post-comment-btn" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">Post</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <button id="save-task-btn" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Board Modal -->
+    <div id="create-board-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden h-full w-full flex items-end md:items-center justify-center z-50">
+        <div class="relative p-6 w-full md:max-w-sm bg-white shadow-xl rounded-t-2xl md:rounded-xl">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Create New Board</h3>
+            <input type="text" id="new-board-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none mb-4" placeholder="Board Name e.g. Marketing">
+            <div class="flex justify-end gap-2">
+                <button id="cancel-board-btn" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
+                <button id="confirm-create-board-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Task Modal -->
+    <div id="add-task-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden h-full w-full flex items-end md:items-center justify-center z-50">
+        <div class="relative p-6 w-full md:max-w-sm bg-white shadow-xl rounded-t-2xl md:rounded-xl">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Add New Task</h3>
+            <input type="text" id="new-task-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none mb-4" placeholder="Task Title">
+            <div class="flex justify-end gap-2">
+                <button id="cancel-add-task-btn" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
+                <button id="confirm-add-task-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium">Add Task</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Board Modal -->
+    <div id="edit-board-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full flex items-center justify-center z-50">
+        <div class="relative p-6 border w-full max-w-sm shadow-xl rounded-xl bg-white">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Edit Board</h3>
+            <input type="text" id="edit-board-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none mb-4" placeholder="Board Name">
+            <div class="flex justify-end gap-2">
+                <button id="cancel-edit-board-btn" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
+                <button id="confirm-edit-board-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Alert Modal -->
+    <div id="alert-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full flex items-center justify-center z-50">
+        <div class="relative p-6 border w-full max-w-sm shadow-xl rounded-xl bg-white text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mb-2">Notice</h3>
+            <p id="alert-message" class="text-sm text-gray-500 mb-6"></p>
+            <button id="close-alert-btn" class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium">OK</button>
+        </div>
+    </div>
+</body>
+</html>

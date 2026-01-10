@@ -1,0 +1,51 @@
+name: Deploy and Replace Secrets
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    # මෙන්න මේ කොටස තමයි පින්තූරයේ තිබුණ අඩුපාඩුව
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Inject Secrets into Firebase Config
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
+        run: |
+          sed -i "s|REPLACE_API_KEY|$FIREBASE_API_KEY|g" js/firebase-config.js
+          sed -i "s|REPLACE_AUTH_DOMAIN|$FIREBASE_AUTH_DOMAIN|g" js/firebase-config.js
+          sed -i "s|REPLACE_PROJECT_ID|$FIREBASE_PROJECT_ID|g" js/firebase-config.js
+          sed -i "s|REPLACE_STORAGE_BUCKET|$FIREBASE_STORAGE_BUCKET|g" js/firebase-config.js
+          sed -i "s|REPLACE_MESSAGING_SENDER_ID|$FIREBASE_MESSAGING_SENDER_ID|g" js/firebase-config.js
+          sed -i "s|REPLACE_APP_ID|$FIREBASE_APP_ID|g" js/firebase-config.js
+          sed -i "s|REPLACE_MEASUREMENT_ID|$FIREBASE_MEASUREMENT_ID|g" js/firebase-config.js
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.' 
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
