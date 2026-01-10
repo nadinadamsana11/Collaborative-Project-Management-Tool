@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, addDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const loadingOverlay = document.getElementById('loading-overlay');
 
@@ -37,6 +37,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const todoCount = document.getElementById('todo-count');
     const inprogressCount = document.getElementById('inprogress-count');
     const doneCount = document.getElementById('done-count');
+    const boardTitleEl = document.getElementById('board-title');
 
     // Notifications
     const notificationBtn = document.getElementById('notification-btn');
@@ -48,6 +49,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
     // State
     let currentTaskStatus = '';
+    let currentBoardId = null;
+    let tasksUnsubscribe = null;
 
     // Auth Check & Data Loading
     onAuthStateChanged(auth, async (user) => {
@@ -58,7 +61,12 @@ const loadingOverlay = document.getElementById('loading-overlay');
             // User is authenticated
             await loadUserProfile(user);
             listenForBoards(user.uid);
-            listenForTasks(user.uid);
+            
+            // Check URL for direct board access
+            const urlParams = new URLSearchParams(window.location.search);
+            const boardId = urlParams.get('boardId');
+            if (boardId) selectBoard(boardId);
+
             if(loadingOverlay) loadingOverlay.classList.add('hidden');
         }
     });
@@ -117,16 +125,31 @@ const loadingOverlay = document.getElementById('loading-overlay');
     }
 
     function renderBoard(board) {
+        const firstLetter = board.name.charAt(0).toUpperCase();
         const boardItem = document.createElement('a');
-        boardItem.href = `#`;
+        boardItem.href = `?boardId=${board.id}`;
         boardItem.dataset.boardId = board.id;
-        boardItem.className = 'flex items-center gap-3 px-2 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100';
+        boardItem.className = 'flex items-center gap-3 px-2 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors';
+        
+        // Handle active state styling if this is the current board
+        if (board.id === currentBoardId) {
+            boardItem.classList.add('bg-indigo-50', 'text-indigo-600');
+            boardItem.classList.remove('text-gray-700', 'hover:bg-gray-100');
+        }
         
         boardItem.innerHTML = `
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
-            <span class="truncate"></span>
+            <div class="w-6 h-6 flex-shrink-0 rounded bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                ${firstLetter}
+            </div>
+            <span class="truncate board-name transition-all duration-300 ${isSidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}"></span>
         `;
         boardItem.querySelector('.truncate').textContent = board.name;
+        
+        boardItem.addEventListener('click', (e) => {
+            e.preventDefault();
+            selectBoard(board.id);
+        });
+
         boardList.appendChild(boardItem);
 
         // Mobile Board List
@@ -154,6 +177,43 @@ const loadingOverlay = document.getElementById('loading-overlay');
         });
     }
 
+    async function selectBoard(boardId) {
+        currentBoardId = boardId;
+        
+        // Update URL
+        const url = new URL(window.location);
+        url.searchParams.set('boardId', boardId);
+        window.history.pushState({}, '', url);
+
+        // Update UI Active State
+        document.querySelectorAll('#board-list a').forEach(el => {
+            if (el.dataset.boardId === boardId) {
+                el.classList.add('bg-indigo-50', 'text-indigo-600');
+                el.classList.remove('text-gray-700', 'hover:bg-gray-100');
+            } else {
+                el.classList.remove('bg-indigo-50', 'text-indigo-600');
+                el.classList.add('text-gray-700', 'hover:bg-gray-100');
+            }
+        });
+
+        // Fetch Board Name
+        try {
+            const boardRef = doc(db, "boards", boardId);
+            const boardSnap = await getDoc(boardRef);
+            if (boardSnap.exists() && boardTitleEl) {
+                boardTitleEl.textContent = boardSnap.data().name;
+            }
+        } catch (error) {
+            console.error("Error fetching board details:", error);
+        }
+
+        // Load Tasks for this board
+        listenForTasks(boardId);
+        
+        // Switch to home view on mobile if needed
+        showPage('home-section');
+    }
+
     // Task Creation & Management
     function createTaskCard(title) {
         const taskCard = document.createElement('div');
@@ -178,13 +238,14 @@ const loadingOverlay = document.getElementById('loading-overlay');
         const taskTitle = newTaskTitleInput.value.trim();
         const user = auth.currentUser;
 
-        if (taskTitle && currentTaskStatus && user) {
+        if (taskTitle && currentTaskStatus && user && currentBoardId) {
             confirmAddTaskBtn.disabled = true;
             confirmAddTaskBtn.textContent = 'Adding...';
             try {
                 await addDoc(collection(db, 'tasks'), {
                     title: taskTitle,
                     status: currentTaskStatus,
+                    boardId: currentBoardId,
                     ownerId: user.uid,
                     createdAt: serverTimestamp()
                 });
@@ -197,12 +258,17 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 confirmAddTaskBtn.disabled = false;
                 confirmAddTaskBtn.textContent = 'Add Task';
             }
+        } else if (!currentBoardId) {
+            alert("Please select a board first.");
         }
     }
 
-    function listenForTasks(userId) {
-        const q = query(collection(db, "tasks"), where("ownerId", "==", userId));
-        onSnapshot(q, (querySnapshot) => {
+    function listenForTasks(boardId) {
+        if (tasksUnsubscribe) tasksUnsubscribe(); // Unsubscribe from previous listener
+
+        const q = query(collection(db, "tasks"), where("boardId", "==", boardId));
+        
+        tasksUnsubscribe = onSnapshot(q, (querySnapshot) => {
             // Clear columns
             todoList.innerHTML = '';
             inprogressList.innerHTML = '';
@@ -231,6 +297,13 @@ const loadingOverlay = document.getElementById('loading-overlay');
     if (confirmCreateBoardBtn) confirmCreateBoardBtn.addEventListener('click', handleCreateBoard);
     if (cancelEditBoardBtn) cancelEditBoardBtn.addEventListener('click', () => closeModal(editBoardModal));
     if (closeAlertBtn) closeAlertBtn.addEventListener('click', () => closeModal(alertModal));
+    
+    // Keyboard Accessibility for Create Board
+    if (newBoardNameInput) {
+        newBoardNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleCreateBoard(e);
+        });
+    }
 
     // Sidebar Toggle Logic
     const sidebar = document.getElementById('sidebar');
@@ -252,6 +325,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 sidebarLogoText.classList.add('opacity-0', 'w-0');
                 sidebarBoardsLabel.classList.add('opacity-0');
                 userInfo.classList.add('opacity-0', 'w-0');
+                document.querySelectorAll('.board-name').forEach(el => el.classList.add('opacity-0', 'w-0', 'overflow-hidden'));
             } else {
                 sidebar.classList.add('w-64');
                 sidebar.classList.remove('w-20');
@@ -259,6 +333,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 sidebarLogoText.classList.remove('opacity-0', 'w-0');
                 sidebarBoardsLabel.classList.remove('opacity-0');
                 userInfo.classList.remove('opacity-0', 'w-0');
+                document.querySelectorAll('.board-name').forEach(el => el.classList.remove('opacity-0', 'w-0', 'overflow-hidden'));
             }
         });
     }
