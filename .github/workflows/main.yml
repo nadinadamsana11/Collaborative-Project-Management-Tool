@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-and-deploy:
-    # මෙන්න මේ කොටස තමයි පින්තූරයේ තිබුණ අඩුපාඩුව
+    # මෙම කොටස අනිවාර්යයෙන්ම තිබිය යුතුයි
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -30,6 +30,7 @@ jobs:
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
           FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
         run: |
+          # sed command එක භාවිතයෙන් placeholder වචන සැබෑ secrets වලින් වෙනස් කිරීම
           sed -i "s|REPLACE_API_KEY|$FIREBASE_API_KEY|g" js/firebase-config.js
           sed -i "s|REPLACE_AUTH_DOMAIN|$FIREBASE_AUTH_DOMAIN|g" js/firebase-config.js
           sed -i "s|REPLACE_PROJECT_ID|$FIREBASE_PROJECT_ID|g" js/firebase-config.js
