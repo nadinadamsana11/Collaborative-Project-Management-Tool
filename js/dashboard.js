@@ -1,6 +1,5 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const loadingOverlay = document.getElementById('loading-overlay');
 
@@ -49,6 +48,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const modalTaskComments = document.getElementById('modal-task-comments');
     const modalCommentInput = document.getElementById('modal-comment-input');
     const postCommentBtn = document.getElementById('post-comment-btn');
+    const seeMoreCommentsBtn = document.getElementById('see-more-comments-btn');
 
     // Lists & Counts
     const boardList = document.getElementById('board-list');
@@ -66,6 +66,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const mobileBoardDropdownList = document.getElementById('mobile-board-dropdown-list');
     const mobileBoardTitleText = document.getElementById('mobile-board-title-text');
     const mobileDropdownCreateBtn = document.getElementById('mobile-dropdown-create-btn');
+    const mobilePageTitle = document.getElementById('mobile-page-title');
+    const mobileBoardSelectorContainer = document.getElementById('mobile-board-selector-container');
     
     // Search & Filter Inputs
     const searchInput = document.getElementById('search-input');
@@ -76,6 +78,10 @@ const loadingOverlay = document.getElementById('loading-overlay');
     // Notifications
     const notificationBtn = document.getElementById('notification-btn');
     const notificationDropdown = document.getElementById('notification-dropdown');
+    
+    // Activity
+    const activityLogBtn = document.getElementById('activity-log-btn');
+    const activityList = document.getElementById('activity-list');
 
     // Navigation
     const navBtns = document.querySelectorAll('.nav-btn');
@@ -91,6 +97,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     let allTasks = []; // Store all tasks for client-side filtering
     let commentsUnsubscribe = null;
     let currentCommentId = null; // For editing comments
+    let commentLimit = 3;
 
     // Auth Check & Data Loading
     onAuthStateChanged(auth, async (user) => {
@@ -101,6 +108,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
             // User is authenticated
             await loadUserProfile(user);
             listenForBoards(user.uid);
+            listenForActivities(user.uid);
             
             // Check URL for direct board access
             const urlParams = new URLSearchParams(window.location.search);
@@ -120,6 +128,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
         if (modal === taskModal && commentsUnsubscribe) {
             commentsUnsubscribe();
             commentsUnsubscribe = null;
+            commentLimit = 3; // Reset limit
         }
     }
 
@@ -147,6 +156,23 @@ const loadingOverlay = document.getElementById('loading-overlay');
         }
     }
 
+    // Activity Logging
+    async function logActivity(action, details) {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        try {
+            await addDoc(collection(db, 'activities'), {
+                userId: user.uid,
+                action: action,
+                details: details,
+                createdAt: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Error logging activity:", error);
+        }
+    }
+
     // Board Creation & Loading
     async function handleCreateBoard(e) {
         e.preventDefault();
@@ -160,9 +186,11 @@ const loadingOverlay = document.getElementById('loading-overlay');
             await addDoc(collection(db, 'boards'), {
                 name: boardName,
                 ownerId: user.uid,
-                createdAt: serverTimestamp()
+                createdAt: serverTimestamp(),
+                isPinned: false
             });
             newBoardNameInput.value = '';
+            logActivity('Created Board', `Created board "${boardName}"`);
             closeModal(createBoardModal);
         } catch (error) {
             console.error("Error adding board: ", error);
@@ -187,12 +215,79 @@ const loadingOverlay = document.getElementById('loading-overlay');
         }
         
         boardItem.innerHTML = `
-            <div class="w-6 h-6 flex-shrink-0 rounded bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
-                ${firstLetter}
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="w-6 h-6 flex-shrink-0 rounded bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                    ${firstLetter}
+                </div>
+                <span class="truncate board-name transition-all duration-300 ${isSidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}"></span>
             </div>
-            <span class="truncate board-name transition-all duration-300 ${isSidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}"></span>
+            <div class="relative ml-auto group/menu ${isSidebarCollapsed ? 'hidden' : ''}">
+                <button class="board-menu-btn p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+                </button>
+            </div>
         `;
         boardItem.querySelector('.truncate').textContent = board.name;
+        if (board.isPinned) {
+            boardItem.querySelector('.truncate').classList.add('font-bold');
+            boardItem.querySelector('.truncate').innerHTML += ' <span class="text-xs text-indigo-500 ml-1">📌</span>';
+        }
+
+        // Dot Menu Logic
+        const menuBtn = boardItem.querySelector('.board-menu-btn');
+        menuBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Create dropdown dynamically to avoid nesting issues
+            const existingDropdown = document.querySelector('.board-context-menu');
+            if (existingDropdown) existingDropdown.remove();
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'board-context-menu absolute right-0 top-full mt-1 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-50 py-1';
+            dropdown.innerHTML = `
+                <button class="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 flex items-center gap-2" id="pin-board-${board.id}">
+                    ${board.isPinned ? 'Unpin' : 'Pin'}
+                </button>
+                <button class="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-gray-100 flex items-center gap-2" id="delete-board-${board.id}">
+                    Delete
+                </button>
+            `;
+            
+            menuBtn.parentElement.appendChild(dropdown);
+
+            document.getElementById(`pin-board-${board.id}`).addEventListener('click', async (ev) => {
+                ev.stopPropagation();
+                await updateDoc(doc(db, "boards", board.id), { isPinned: !board.isPinned });
+                dropdown.remove();
+            });
+
+            document.getElementById(`delete-board-${board.id}`).addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                dropdown.remove();
+                // Reuse confirm modal logic
+                pendingDeleteAction = async () => {
+                    await deleteDoc(doc(db, "boards", board.id));
+                    logActivity('Deleted Board', `Deleted board "${board.name}"`);
+                    closeModal(confirmModal);
+                    if (currentBoardId === board.id) {
+                        currentBoardId = null;
+                        boardList.innerHTML = '';
+                        // Reset view
+                    }
+                };
+                openModal(confirmModal);
+            });
+
+            // Close on click outside
+            const closeMenu = (ev) => {
+                if (!dropdown.contains(ev.target)) {
+                    dropdown.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', closeMenu), 0);
+        });
         
         boardItem.addEventListener('click', (e) => {
             e.preventDefault();
@@ -218,7 +313,11 @@ const loadingOverlay = document.getElementById('loading-overlay');
     }
 
     function listenForBoards(userId) {
-        const q = query(collection(db, "boards"), where("ownerId", "==", userId));
+        // Note: orderBy with where requires an index. If index is missing, this might fail.
+        // We will try to sort client-side to be safe if index creation is an issue for the user.
+        // But requirement says "Use Firestore ... orderBy for pinned boards".
+        // We will use orderBy. If it fails, check console for index link.
+        const q = query(collection(db, "boards"), where("ownerId", "==", userId), orderBy("isPinned", "desc"), orderBy("createdAt", "desc"));
         onSnapshot(q, (querySnapshot) => {
             boards = [];
             boardList.innerHTML = ''; // Clear list before re-rendering
@@ -379,6 +478,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 newTaskDescInput.value = '';
                 newTaskDateInput.value = '';
                 newTaskLabelInput.value = '';
+                logActivity('Added Task', `Added task "${taskTitle}"`);
                 closeModal(addTaskModal);
             } catch (error) {
                 console.error("Error adding task:", error);
@@ -462,6 +562,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
         pendingDeleteAction = async () => {
             try {
                 await deleteDoc(doc(db, "tasks", taskId));
+                logActivity('Deleted Task', 'Deleted a task');
                 closeModal(taskModal);
                 closeModal(confirmModal);
             } catch (error) {
@@ -479,21 +580,39 @@ const loadingOverlay = document.getElementById('loading-overlay');
         const q = query(
             collection(db, "comments"), 
             where("taskId", "==", taskId),
-            orderBy("createdAt", "asc")
+            orderBy("createdAt", "asc"),
+            limit(commentLimit + 1) // Fetch one extra to check if "See More" is needed
         );
 
         commentsUnsubscribe = onSnapshot(q, (snapshot) => {
             modalTaskComments.innerHTML = '';
+            const docs = snapshot.docs;
+            const hasMore = docs.length > commentLimit;
+            const displayDocs = hasMore ? docs.slice(0, commentLimit) : docs;
+
             if (snapshot.empty) {
                 modalTaskComments.innerHTML = '<p class="text-gray-400 text-xs italic text-center py-2">No comments yet.</p>';
-                return;
+            } else {
+                displayDocs.forEach(doc => {
+                    renderComment({ id: doc.id, ...doc.data() });
+                });
             }
             
-            snapshot.forEach(doc => {
-                renderComment({ id: doc.id, ...doc.data() });
-            });
+            if (hasMore) {
+                seeMoreCommentsBtn.classList.remove('hidden');
+            } else {
+                seeMoreCommentsBtn.classList.add('hidden');
+            }
+
             // Scroll to bottom
             modalTaskComments.scrollTop = modalTaskComments.scrollHeight;
+        });
+    }
+
+    if (seeMoreCommentsBtn) {
+        seeMoreCommentsBtn.addEventListener('click', () => {
+            commentLimit += 3;
+            if (currentTaskId) listenForComments(currentTaskId);
         });
     }
 
@@ -546,6 +665,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
             pendingDeleteAction = async () => {
                 try {
                     await deleteDoc(doc(db, "comments", comment.id));
+                    logActivity('Deleted Comment', 'Deleted a comment');
                     closeModal(confirmModal);
                 } catch (error) {
                     console.error("Error deleting comment:", error);
@@ -597,6 +717,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 createdAt: serverTimestamp()
             });
             modalCommentInput.value = '';
+            logActivity('Posted Comment', `Commented on task`);
         } catch (error) {
             console.error("Error posting comment:", error);
         }
@@ -692,6 +813,41 @@ const loadingOverlay = document.getElementById('loading-overlay');
             if(loadingOverlay) loadingOverlay.classList.add('hidden');
             document.getElementById('home-section').classList.remove('blur-sm', 'pointer-events-none');
         });
+    }
+
+    // Activity Log Rendering
+    function listenForActivities(userId) {
+        const q = query(collection(db, "activities"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(20));
+        onSnapshot(q, (snapshot) => {
+            if(activityList) {
+                activityList.innerHTML = '';
+                if (snapshot.empty) {
+                    activityList.innerHTML = '<p class="text-gray-500 text-center py-8">No recent activity.</p>';
+                    return;
+                }
+                snapshot.forEach(doc => {
+                    renderActivity(doc.data());
+                });
+            }
+        });
+    }
+
+    function renderActivity(activity) {
+        const div = document.createElement('div');
+        div.className = "bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex items-start gap-3";
+        
+        const date = activity.createdAt ? (activity.createdAt.toDate ? activity.createdAt.toDate() : new Date(activity.createdAt)) : new Date();
+        const dateStr = date.toLocaleString();
+
+        div.innerHTML = `
+            <div class="h-2 w-2 mt-2 rounded-full bg-indigo-500 flex-shrink-0"></div>
+            <div>
+                <p class="text-sm font-medium text-gray-900">${activity.action}</p>
+                <p class="text-xs text-gray-500">${activity.details}</p>
+                <p class="text-[10px] text-gray-400 mt-1">${dateStr}</p>
+            </div>
+        `;
+        activityList.appendChild(div);
     }
 
     // Event Listeners
@@ -796,6 +952,13 @@ const loadingOverlay = document.getElementById('loading-overlay');
         });
     }
 
+    if(activityLogBtn) {
+        activityLogBtn.addEventListener('click', () => {
+            showPage('activity-section');
+            profileDropdown.classList.add('hidden');
+        });
+    }
+
     addTaskBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             currentTaskStatus = btn.dataset.status;
@@ -871,6 +1034,20 @@ const loadingOverlay = document.getElementById('loading-overlay');
         // Show target page
         const target = document.getElementById(pageId);
         if(target) target.classList.remove('hidden');
+
+        // Update Mobile Header
+        if (pageId === 'home-section') {
+            if(mobileBoardSelectorContainer) mobileBoardSelectorContainer.classList.remove('hidden');
+            if(mobilePageTitle) mobilePageTitle.classList.add('hidden');
+        } else {
+            if(mobileBoardSelectorContainer) mobileBoardSelectorContainer.classList.add('hidden');
+            if(mobilePageTitle) {
+                mobilePageTitle.classList.remove('hidden');
+                if(pageId === 'activity-section') mobilePageTitle.textContent = 'Activity Log';
+                if(pageId === 'profile-section') mobilePageTitle.textContent = 'Profile';
+                if(pageId === 'notifications-section') mobilePageTitle.textContent = 'Notifications';
+            }
+        }
 
         // Update Nav Buttons
         navBtns.forEach(btn => {
