@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const loadingOverlay = document.getElementById('loading-overlay');
 
@@ -10,6 +10,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const taskModal = document.getElementById('task-modal');
     const editBoardModal = document.getElementById('edit-board-modal');
     const alertModal = document.getElementById('alert-modal');
+    const confirmModal = document.getElementById('confirm-modal');
 
     // Modal Buttons & Inputs
     const createBoardBtn = document.getElementById('create-board-btn');
@@ -22,11 +23,17 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const cancelAddTaskBtn = document.getElementById('cancel-add-task-btn');
     const confirmAddTaskBtn = document.getElementById('confirm-add-task-btn');
     const newTaskTitleInput = document.getElementById('new-task-title');
+    const newTaskDescInput = document.getElementById('new-task-desc');
+    const newTaskDateInput = document.getElementById('new-task-date');
+    const newTaskLabelInput = document.getElementById('new-task-label');
 
     const closeModalBtn = document.getElementById('close-modal-btn');
     const modalTaskTitleInput = document.getElementById('modal-task-title');
+    const deleteTaskBtn = document.getElementById('delete-task-btn');
     const cancelEditBoardBtn = document.getElementById('cancel-edit-board-btn');
     const closeAlertBtn = document.getElementById('close-alert-btn');
+    const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
+    const confirmOkBtn = document.getElementById('confirm-ok-btn');
 
     // Lists & Counts
     const boardList = document.getElementById('board-list');
@@ -50,7 +57,9 @@ const loadingOverlay = document.getElementById('loading-overlay');
     // State
     let currentTaskStatus = '';
     let currentBoardId = null;
+    let currentTaskId = null; // For editing/deleting
     let tasksUnsubscribe = null;
+    let pendingDeleteAction = null;
 
     // Auth Check & Data Loading
     onAuthStateChanged(auth, async (user) => {
@@ -179,6 +188,10 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
     async function selectBoard(boardId) {
         currentBoardId = boardId;
+
+        // Show loading state
+        if(loadingOverlay) loadingOverlay.classList.remove('hidden');
+        document.getElementById('home-section').classList.add('blur-sm', 'pointer-events-none');
         
         // Update URL
         const url = new URL(window.location);
@@ -215,19 +228,64 @@ const loadingOverlay = document.getElementById('loading-overlay');
     }
 
     // Task Creation & Management
-    function createTaskCard(title) {
+    function createTaskCard(task) {
         const taskCard = document.createElement('div');
-        taskCard.className = 'task-card p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50';
+        taskCard.className = 'task-card group relative p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 hover:shadow-md transition-all';
         taskCard.draggable = true; // For future drag-and-drop
+        taskCard.dataset.taskId = task.id;
+        
         const p = document.createElement('p');
         p.className = "text-sm font-medium text-gray-800";
-        p.textContent = title;
+        p.textContent = task.title;
         taskCard.appendChild(p);
+
+        if (task.label) {
+            const labelSpan = document.createElement('span');
+            labelSpan.className = "inline-block mt-2 px-2 py-0.5 text-[10px] rounded-full bg-indigo-100 text-indigo-700 font-medium";
+            labelSpan.textContent = task.label;
+            taskCard.appendChild(labelSpan);
+        }
+
+        // Hover Actions
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = "absolute top-2 right-2 hidden group-hover:flex gap-1 bg-white rounded shadow-sm p-1";
+        actionsDiv.innerHTML = `
+            <button class="p-1 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100" title="Edit">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+            </button>
+            <button class="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100" title="Delete">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+        `;
+        
+        // Edit Action
+        actionsDiv.children[0].addEventListener('click', (e) => {
+            e.stopPropagation();
+            openTaskDetail(task);
+        });
+
+        // Delete Action
+        actionsDiv.children[1].addEventListener('click', (e) => {
+            e.stopPropagation();
+            confirmDeleteTask(task.id);
+        });
+
+        taskCard.appendChild(actionsDiv);
         
         // Add click listener to open detail modal
         taskCard.addEventListener('click', () => {
-            modalTaskTitleInput.value = title;
-            openModal(taskModal);
+            openTaskDetail(task);
+        });
+
+        // Drag Events
+        taskCard.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', task.id);
+            e.dataTransfer.effectAllowed = 'move';
+            taskCard.classList.add('opacity-50');
+        });
+
+        taskCard.addEventListener('dragend', () => {
+            taskCard.classList.remove('opacity-50');
         });
 
         return taskCard;
@@ -236,6 +294,9 @@ const loadingOverlay = document.getElementById('loading-overlay');
     async function handleAddTask(e) {
         e.preventDefault();
         const taskTitle = newTaskTitleInput.value.trim();
+        const taskDesc = newTaskDescInput.value.trim();
+        const taskDate = newTaskDateInput.value;
+        const taskLabel = newTaskLabelInput.value;
         const user = auth.currentUser;
 
         if (taskTitle && currentTaskStatus && user && currentBoardId) {
@@ -244,12 +305,18 @@ const loadingOverlay = document.getElementById('loading-overlay');
             try {
                 await addDoc(collection(db, 'tasks'), {
                     title: taskTitle,
+                    description: taskDesc,
+                    dueDate: taskDate,
+                    label: taskLabel,
                     status: currentTaskStatus,
                     boardId: currentBoardId,
                     ownerId: user.uid,
                     createdAt: serverTimestamp()
                 });
                 newTaskTitleInput.value = '';
+                newTaskDescInput.value = '';
+                newTaskDateInput.value = '';
+                newTaskLabelInput.value = '';
                 closeModal(addTaskModal);
             } catch (error) {
                 console.error("Error adding task:", error);
@@ -262,6 +329,60 @@ const loadingOverlay = document.getElementById('loading-overlay');
             alert("Please select a board first.");
         }
     }
+
+    function openTaskDetail(task) {
+        currentTaskId = task.id;
+        modalTaskTitleInput.value = task.title;
+        // Populate other fields if they exist in modal
+        if(document.getElementById('modal-task-desc')) document.getElementById('modal-task-desc').value = task.description || '';
+        if(document.getElementById('modal-task-duedate')) document.getElementById('modal-task-duedate').value = task.dueDate || '';
+        if(document.getElementById('modal-task-label')) document.getElementById('modal-task-label').value = task.label || '';
+        
+        openModal(taskModal);
+    }
+
+    function confirmDeleteTask(taskId) {
+        pendingDeleteAction = async () => {
+            try {
+                await deleteDoc(doc(db, "tasks", taskId));
+                closeModal(taskModal);
+                closeModal(confirmModal);
+            } catch (error) {
+                console.error("Error deleting task:", error);
+                alert("Failed to delete task.");
+            }
+        };
+        openModal(confirmModal);
+    }
+
+    // Drag and Drop Logic for Columns
+    const columns = [todoList, inprogressList, doneList];
+    columns.forEach(col => {
+        col.addEventListener('dragover', (e) => {
+            e.preventDefault(); // Allow drop
+            col.classList.add('bg-indigo-50', 'ring-2', 'ring-indigo-300', 'ring-inset');
+        });
+
+        col.addEventListener('dragleave', () => {
+            col.classList.remove('bg-indigo-50', 'ring-2', 'ring-indigo-300', 'ring-inset');
+        });
+
+        col.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            col.classList.remove('bg-indigo-50', 'ring-2', 'ring-indigo-300', 'ring-inset');
+            const taskId = e.dataTransfer.getData('text/plain');
+            const newStatus = col.dataset.status;
+
+            if (taskId && newStatus) {
+                try {
+                    const taskRef = doc(db, "tasks", taskId);
+                    await updateDoc(taskRef, { status: newStatus });
+                } catch (error) {
+                    console.error("Error moving task:", error);
+                }
+            }
+        });
+    });
 
     function listenForTasks(boardId) {
         if (tasksUnsubscribe) tasksUnsubscribe(); // Unsubscribe from previous listener
@@ -276,7 +397,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
             
             querySnapshot.forEach((doc) => {
                 const task = doc.data();
-                const card = createTaskCard(task.title);
+                const card = createTaskCard({ id: doc.id, ...task });
                 
                 if (task.status === 'todo') todoList.appendChild(card);
                 else if (task.status === 'inprogress') inprogressList.appendChild(card);
@@ -287,6 +408,10 @@ const loadingOverlay = document.getElementById('loading-overlay');
             todoCount.textContent = todoList.children.length;
             inprogressCount.textContent = inprogressList.children.length;
             doneCount.textContent = doneList.children.length;
+
+            // Hide loading state
+            if(loadingOverlay) loadingOverlay.classList.add('hidden');
+            document.getElementById('home-section').classList.remove('blur-sm', 'pointer-events-none');
         });
     }
 
@@ -298,10 +423,30 @@ const loadingOverlay = document.getElementById('loading-overlay');
     if (cancelEditBoardBtn) cancelEditBoardBtn.addEventListener('click', () => closeModal(editBoardModal));
     if (closeAlertBtn) closeAlertBtn.addEventListener('click', () => closeModal(alertModal));
     
+    // Confirmation Modal
+    if (confirmCancelBtn) confirmCancelBtn.addEventListener('click', () => {
+        pendingDeleteAction = null;
+        closeModal(confirmModal);
+    });
+    if (confirmOkBtn) confirmOkBtn.addEventListener('click', () => {
+        if (pendingDeleteAction) pendingDeleteAction();
+    });
+
+    // Task Modal Actions
+    if (deleteTaskBtn) deleteTaskBtn.addEventListener('click', () => {
+        if (currentTaskId) confirmDeleteTask(currentTaskId);
+    });
+    
     // Keyboard Accessibility for Create Board
     if (newBoardNameInput) {
         newBoardNameInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') handleCreateBoard(e);
+        });
+    }
+    // Keyboard Accessibility for Add Task
+    if (newTaskTitleInput) {
+        newTaskTitleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleAddTask(e);
         });
     }
 
@@ -381,6 +526,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
         if (e.target === createBoardModal) closeModal(createBoardModal);
         if (e.target === addTaskModal) closeModal(addTaskModal);
         if (e.target === taskModal) closeModal(taskModal);
+        if (e.target === confirmModal) closeModal(confirmModal);
     });
 
     if(logoutBtn) {
