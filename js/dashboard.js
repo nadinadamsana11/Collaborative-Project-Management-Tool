@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const loadingOverlay = document.getElementById('loading-overlay');
 
@@ -35,6 +35,11 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const closeAlertBtn = document.getElementById('close-alert-btn');
     const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
     const confirmOkBtn = document.getElementById('confirm-ok-btn');
+    
+    const modalTitle = document.getElementById('modal-title');
+    const modalTaskComments = document.getElementById('modal-task-comments');
+    const modalCommentInput = document.getElementById('modal-comment-input');
+    const postCommentBtn = document.getElementById('post-comment-btn');
 
     // Lists & Counts
     const boardList = document.getElementById('board-list');
@@ -75,6 +80,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     let pendingDeleteAction = null;
     let boards = []; // Store boards locally for mobile selector
     let allTasks = []; // Store all tasks for client-side filtering
+    let commentsUnsubscribe = null;
 
     // Auth Check & Data Loading
     onAuthStateChanged(auth, async (user) => {
@@ -99,7 +105,13 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
     // Modal Management
     function openModal(modal) { if (modal) modal.classList.remove('hidden'); }
-    function closeModal(modal) { if (modal) modal.classList.add('hidden'); }
+    function closeModal(modal) { 
+        if (modal) modal.classList.add('hidden'); 
+        if (modal === taskModal && commentsUnsubscribe) {
+            commentsUnsubscribe();
+            commentsUnsubscribe = null;
+        }
+    }
 
     // Profile Loading
     async function loadUserProfile(user) {
@@ -382,6 +394,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
     function setModalMode(mode) {
         const isView = mode === 'view';
         
+        if (modalTitle) modalTitle.textContent = isView ? 'Task Details' : 'Edit Task';
+
         // Toggle Inputs
         if(modalTaskTitleInput) modalTaskTitleInput.disabled = isView;
         if(document.getElementById('modal-task-desc')) document.getElementById('modal-task-desc').disabled = isView;
@@ -407,6 +421,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
         if(document.getElementById('modal-task-label')) document.getElementById('modal-task-label').value = task.label || '';
         
         setModalMode('view');
+        listenForComments(task.id);
         openModal(taskModal);
     }
 
@@ -445,6 +460,83 @@ const loadingOverlay = document.getElementById('loading-overlay');
             }
         };
         openModal(confirmModal);
+    }
+
+    // Comments System
+    function listenForComments(taskId) {
+        if (commentsUnsubscribe) commentsUnsubscribe();
+        
+        const q = query(
+            collection(db, "comments"), 
+            where("taskId", "==", taskId),
+            orderBy("createdAt", "asc")
+        );
+
+        commentsUnsubscribe = onSnapshot(q, (snapshot) => {
+            modalTaskComments.innerHTML = '';
+            if (snapshot.empty) {
+                modalTaskComments.innerHTML = '<p class="text-gray-400 text-xs italic text-center py-2">No comments yet.</p>';
+                return;
+            }
+            
+            snapshot.forEach(doc => {
+                renderComment(doc.data());
+            });
+            // Scroll to bottom
+            modalTaskComments.scrollTop = modalTaskComments.scrollHeight;
+        });
+    }
+
+    function renderComment(comment) {
+        const div = document.createElement('div');
+        div.className = "bg-gray-50 rounded-lg p-2 text-sm border border-gray-100";
+        
+        const header = document.createElement('div');
+        header.className = "flex justify-between items-center mb-1";
+        
+        const userSpan = document.createElement('span');
+        userSpan.className = "font-semibold text-indigo-600 text-xs";
+        userSpan.textContent = comment.userName || "Unknown";
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.className = "text-gray-400 text-[10px]";
+        if (comment.createdAt) {
+            const date = comment.createdAt.toDate ? comment.createdAt.toDate() : new Date(comment.createdAt);
+            timeSpan.textContent = date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+        
+        header.appendChild(userSpan);
+        header.appendChild(timeSpan);
+        
+        const textP = document.createElement('p');
+        textP.className = "text-gray-700 text-xs break-words";
+        textP.textContent = comment.text;
+        
+        div.appendChild(header);
+        div.appendChild(textP);
+        
+        modalTaskComments.appendChild(div);
+    }
+
+    async function handlePostComment() {
+        const text = modalCommentInput.value.trim();
+        if (!text || !currentTaskId) return;
+        
+        const user = auth.currentUser;
+        if (!user) return;
+
+        try {
+            await addDoc(collection(db, "comments"), {
+                taskId: currentTaskId,
+                userId: user.uid,
+                userName: user.displayName || user.email,
+                text: text,
+                createdAt: serverTimestamp()
+            });
+            modalCommentInput.value = '';
+        } catch (error) {
+            console.error("Error posting comment:", error);
+        }
     }
 
     // Initialize SortableJS
@@ -572,6 +664,9 @@ const loadingOverlay = document.getElementById('loading-overlay');
     if (editTaskBtn) editTaskBtn.addEventListener('click', () => setModalMode('edit'));
     if (saveTaskBtn) saveTaskBtn.addEventListener('click', handleSaveTask);
     
+    if (postCommentBtn) postCommentBtn.addEventListener('click', handlePostComment);
+    addEnterListener(modalCommentInput, handlePostComment);
+
     // Helper for Enter Key
     function addEnterListener(input, action) {
         if (input) {
