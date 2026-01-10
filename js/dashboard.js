@@ -29,6 +29,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const closeModalBtn = document.getElementById('close-modal-btn');
     const modalTaskTitleInput = document.getElementById('modal-task-title');
     const deleteTaskBtn = document.getElementById('delete-task-btn');
+    const editTaskBtn = document.getElementById('edit-task-btn');
+    const saveTaskBtn = document.getElementById('save-task-btn');
     const cancelEditBoardBtn = document.getElementById('cancel-edit-board-btn');
     const closeAlertBtn = document.getElementById('close-alert-btn');
     const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
@@ -305,7 +307,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
         // Hover Actions
         const actionsDiv = document.createElement('div');
-        actionsDiv.className = "absolute top-2 right-2 hidden group-hover:flex gap-1 bg-white rounded shadow-sm p-1";
+        actionsDiv.className = "absolute top-2 right-2 hidden md:group-hover:flex gap-1 bg-white rounded shadow-sm p-1";
         actionsDiv.innerHTML = `
             <button class="p-1 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100" title="Edit">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
@@ -377,6 +379,25 @@ const loadingOverlay = document.getElementById('loading-overlay');
         }
     }
 
+    function setModalMode(mode) {
+        const isView = mode === 'view';
+        
+        // Toggle Inputs
+        if(modalTaskTitleInput) modalTaskTitleInput.disabled = isView;
+        if(document.getElementById('modal-task-desc')) document.getElementById('modal-task-desc').disabled = isView;
+        if(document.getElementById('modal-task-duedate')) document.getElementById('modal-task-duedate').disabled = isView;
+        if(document.getElementById('modal-task-label')) document.getElementById('modal-task-label').disabled = isView;
+        
+        // Toggle Buttons
+        if (isView) {
+            if(editTaskBtn) editTaskBtn.classList.remove('hidden');
+            if(saveTaskBtn) saveTaskBtn.classList.add('hidden');
+        } else {
+            if(editTaskBtn) editTaskBtn.classList.add('hidden');
+            if(saveTaskBtn) saveTaskBtn.classList.remove('hidden');
+        }
+    }
+
     function openTaskDetail(task) {
         currentTaskId = task.id;
         modalTaskTitleInput.value = task.title;
@@ -385,7 +406,31 @@ const loadingOverlay = document.getElementById('loading-overlay');
         if(document.getElementById('modal-task-duedate')) document.getElementById('modal-task-duedate').value = task.dueDate || '';
         if(document.getElementById('modal-task-label')) document.getElementById('modal-task-label').value = task.label || '';
         
+        setModalMode('view');
         openModal(taskModal);
+    }
+
+    async function handleSaveTask() {
+        if (!currentTaskId) return;
+        
+        const title = modalTaskTitleInput.value;
+        const desc = document.getElementById('modal-task-desc').value;
+        const date = document.getElementById('modal-task-duedate').value;
+        const label = document.getElementById('modal-task-label').value;
+        
+        try {
+            const taskRef = doc(db, "tasks", currentTaskId);
+            await updateDoc(taskRef, {
+                title: title,
+                description: desc,
+                dueDate: date,
+                label: label
+            });
+            closeModal(taskModal);
+        } catch (e) {
+            console.error("Error updating task", e);
+            alert("Failed to save task.");
+        }
     }
 
     function confirmDeleteTask(taskId) {
@@ -524,6 +569,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
     if (deleteTaskBtn) deleteTaskBtn.addEventListener('click', () => {
         if (currentTaskId) confirmDeleteTask(currentTaskId);
     });
+    if (editTaskBtn) editTaskBtn.addEventListener('click', () => setModalMode('edit'));
+    if (saveTaskBtn) saveTaskBtn.addEventListener('click', handleSaveTask);
     
     // Helper for Enter Key
     function addEnterListener(input, action) {
