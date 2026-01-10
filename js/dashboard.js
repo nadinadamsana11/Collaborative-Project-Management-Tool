@@ -68,7 +68,6 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const mobileBoardDropdownList = document.getElementById('mobile-board-dropdown-list');
     const mobileBoardTitleText = document.getElementById('mobile-board-title-text');
     const mobileDropdownCreateBtn = document.getElementById('mobile-dropdown-create-btn');
-    const mobilePageTitle = document.getElementById('mobile-page-title');
     const mobileBoardSelectorContainer = document.getElementById('mobile-board-selector-container');
     
     // Search & Filter Inputs
@@ -344,6 +343,11 @@ const loadingOverlay = document.getElementById('loading-overlay');
                     renderBoard(boardData);
                 });
 
+                // Update Priority Counts if tasks are loaded
+                if (allTasks.length > 0) {
+                    updatePriorityCounts();
+                }
+
                 // Auto-select first board if none selected
                 if (!currentBoardId && boards.length > 0) {
                     selectBoard(boards[0].id);
@@ -353,6 +357,11 @@ const loadingOverlay = document.getElementById('loading-overlay');
                 if (currentBoardId) {
                     // This is handled by selectBoard updating UI, but we need to ensure dropdown is current
                 }
+            }
+        }, (error) => {
+            console.error("Error fetching boards:", error);
+            if (error.code === 'failed-precondition') {
+                console.error("Firestore Index Required. Please check the console link to create it.");
             }
         });
     }
@@ -795,6 +804,37 @@ const loadingOverlay = document.getElementById('loading-overlay');
         renderTasks(filteredTasks);
     }
 
+    function updatePriorityCounts() {
+        const counts = {
+            'High Priority': 0,
+            'Medium Priority': 0,
+            'Low Priority': 0,
+            'Bug': 0,
+            'Feature': 0
+        };
+
+        allTasks.forEach(task => {
+            if (counts.hasOwnProperty(task.label)) {
+                counts[task.label]++;
+            }
+        });
+
+        const updateSelect = (selectId) => {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            
+            Array.from(select.options).forEach(opt => {
+                if (opt.value === "") return;
+                if (counts.hasOwnProperty(opt.value)) {
+                    opt.textContent = `${opt.value} (${counts[opt.value]})`;
+                }
+            });
+        };
+
+        updateSelect('filter-select');
+        updateSelect('mobile-filter-select');
+    }
+
     function renderTasks(tasks) {
         // Clear columns
         todoList.innerHTML = '';
@@ -836,6 +876,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
             });
 
             applyFilters();
+            updatePriorityCounts();
             
             // Hide loading state
             if(loadingOverlay) loadingOverlay.classList.add('hidden');
@@ -1067,15 +1108,8 @@ const loadingOverlay = document.getElementById('loading-overlay');
         // Update Mobile Header
         if (pageId === 'home-section') {
             if(mobileBoardSelectorContainer) mobileBoardSelectorContainer.classList.remove('hidden');
-            if(mobilePageTitle) mobilePageTitle.classList.add('hidden');
         } else {
             if(mobileBoardSelectorContainer) mobileBoardSelectorContainer.classList.add('hidden');
-            if(mobilePageTitle) {
-                mobilePageTitle.classList.remove('hidden');
-                if(pageId === 'activity-section') mobilePageTitle.textContent = 'Activity Log';
-                if(pageId === 'profile-section') mobilePageTitle.textContent = 'Profile';
-                if(pageId === 'notifications-section') mobilePageTitle.textContent = 'Notifications';
-            }
         }
 
         // Update Nav Buttons

@@ -85,17 +85,14 @@
                 <!-- Desktop Title -->
                 <h2 id="board-title" class="hidden md:block text-lg font-bold text-gray-900">Select a Board</h2>
                 
-                <!-- Mobile Page Title -->
-                <h2 id="mobile-page-title" class="md:hidden text-lg font-bold text-gray-900 hidden"></h2>
-
                 <!-- Mobile Board Selector -->
-                <div id="mobile-board-selector-container" class="relative md:hidden ml-auto">
+                <div id="mobile-board-selector-container" class="relative md:hidden ml-auto mr-1">
                     <button id="mobile-board-select-btn" class="flex items-center gap-2 text-lg font-bold text-gray-900 focus:outline-none">
                         <span id="mobile-board-title-text">Select Board</span>
                         <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <!-- Mobile Dropdown -->
-                    <div id="mobile-board-dropdown" class="hidden absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-30 max-h-[80vh] overflow-y-auto">
+                    <div id="mobile-board-dropdown" class="hidden absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-30 max-h-[80vh] overflow-y-auto no-scrollbar">
                         <div id="mobile-board-dropdown-list" class="p-2 space-y-1"></div>
                         <div class="p-2 border-t border-gray-100">
                             <button id="mobile-dropdown-create-btn" class="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg">
@@ -125,7 +122,7 @@
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                         <span id="notification-badge" class="hidden absolute top-0 right-0 block h-2 w-2 rounded-full ring-2 ring-white bg-red-500"></span>
                     </button>
-                    <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200 max-h-96 overflow-y-auto">
+                    <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200 max-h-96 overflow-y-auto no-scrollbar">
                         <div class="px-4 py-2 border-b border-gray-100 font-semibold text-sm text-gray-700">Notifications</div>
                         <div id="notification-list">
                             <!-- Notifications will be injected here -->
@@ -160,7 +157,7 @@
                         <h3 class="font-semibold text-gray-700">To Do</h3>
                         <span id="todo-count" class="bg-gray-200 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">0</span>
                     </div>
-                    <div id="todo-list" data-status="todo" class="task-list p-3 flex-1 overflow-y-auto space-y-3 min-h-[100px] transition-colors duration-200">
+                    <div id="todo-list" data-status="todo" class="task-list p-3 flex-1 overflow-y-auto space-y-3 min-h-[100px] transition-colors duration-200 no-scrollbar">
                         <!-- Tasks will be injected here -->
                     </div>
                     <div class="p-3 border-t border-gray-100">
@@ -176,7 +173,7 @@
                         <h3 class="font-semibold text-gray-700">In Progress</h3>
                         <span id="inprogress-count" class="bg-indigo-100 text-indigo-600 text-xs font-medium px-2 py-0.5 rounded-full">0</span>
                     </div>
-                    <div id="inprogress-list" data-status="inprogress" class="task-list p-3 flex-1 overflow-y-auto space-y-3 min-h-[100px] transition-colors duration-200">
+                    <div id="inprogress-list" data-status="inprogress" class="task-list p-3 flex-1 overflow-y-auto space-y-3 min-h-[100px] transition-colors duration-200 no-scrollbar">
                         <!-- Tasks will be injected here -->
                     </div>
                     <div class="p-3 border-t border-gray-100">
@@ -192,7 +189,7 @@
                         <h3 class="font-semibold text-gray-700">Done</h3>
                         <span id="done-count" class="bg-green-100 text-green-600 text-xs font-medium px-2 py-0.5 rounded-full">0</span>
                     </div>
-                    <div id="done-list" data-status="done" class="task-list p-3 flex-1 overflow-y-auto space-y-3 min-h-[100px] transition-colors duration-200">
+                    <div id="done-list" data-status="done" class="task-list p-3 flex-1 overflow-y-auto space-y-3 min-h-[100px] transition-colors duration-200 no-scrollbar">
                         <!-- Tasks will be injected here -->
                     </div>
                     <div class="p-3 border-t border-gray-100">
@@ -214,7 +211,7 @@
         </div>
 
         <!-- PAGE: ACTIVITY -->
-        <div id="activity-section" class="page-section hidden flex-1 bg-gray-50 p-4 overflow-y-auto">
+        <div id="activity-section" class="page-section hidden flex-1 bg-gray-50 p-4 overflow-y-auto no-scrollbar">
             <h2 class="text-xl font-bold text-gray-900 mb-4">Activity Log</h2>
             <div id="activity-list" class="space-y-4 max-w-3xl mx-auto">
                 <!-- Activities -->
@@ -223,7 +220,7 @@
         </div>
 
         <!-- PAGE: NOTIFICATIONS (Mobile Only View) -->
-        <div id="notifications-section" class="page-section hidden flex-1 bg-white p-4 overflow-y-auto">
+        <div id="notifications-section" class="page-section hidden flex-1 bg-white p-4 overflow-y-auto no-scrollbar">
             <h2 class="text-xl font-bold text-gray-900 mb-4">Notifications</h2>
             <div id="mobile-notification-list" class="space-y-4">
                 <p class="text-gray-500 text-center py-8">No new notifications.</p>
@@ -231,7 +228,7 @@
         </div>
 
         <!-- PAGE: PROFILE (Mobile Only View) -->
-        <div id="profile-section" class="page-section hidden flex-1 bg-gray-50 p-4 overflow-y-auto">
+        <div id="profile-section" class="page-section hidden flex-1 bg-gray-50 p-4 overflow-y-auto no-scrollbar">
             <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 text-center mb-6">
                 <div id="mobile-user-avatar" class="h-20 w-20 rounded-full bg-indigo-100 mx-auto flex items-center justify-center text-indigo-600 font-bold text-2xl mb-4">U</div>
                 <h2 id="mobile-user-name" class="text-xl font-bold text-gray-900">User Name</h2>
