@@ -50,6 +50,12 @@ const loadingOverlay = document.getElementById('loading-overlay');
     const mobileBoardDropdownList = document.getElementById('mobile-board-dropdown-list');
     const mobileBoardTitleText = document.getElementById('mobile-board-title-text');
     const mobileDropdownCreateBtn = document.getElementById('mobile-dropdown-create-btn');
+    
+    // Search & Filter Inputs
+    const searchInput = document.getElementById('search-input');
+    const filterSelect = document.getElementById('filter-select');
+    const mobileSearchInput = document.getElementById('mobile-search-input');
+    const mobileFilterSelect = document.getElementById('mobile-filter-select');
 
     // Notifications
     const notificationBtn = document.getElementById('notification-btn');
@@ -66,6 +72,7 @@ const loadingOverlay = document.getElementById('loading-overlay');
     let tasksUnsubscribe = null;
     let pendingDeleteAction = null;
     let boards = []; // Store boards locally for mobile selector
+    let allTasks = []; // Store all tasks for client-side filtering
 
     // Auth Check & Data Loading
     onAuthStateChanged(auth, async (user) => {
@@ -423,6 +430,49 @@ const loadingOverlay = document.getElementById('loading-overlay');
         });
     }
 
+    // Search & Filter Logic
+    function applyFilters() {
+        const searchTerm = (searchInput.value || mobileSearchInput.value).toLowerCase();
+        const filterLabel = filterSelect.value || mobileFilterSelect.value;
+
+        // Filter tasks
+        const filteredTasks = allTasks.filter(task => {
+            const matchesSearch = task.title.toLowerCase().includes(searchTerm) || 
+                                  (task.description && task.description.toLowerCase().includes(searchTerm));
+            const matchesFilter = filterLabel ? task.label === filterLabel : true;
+            return matchesSearch && matchesFilter;
+        });
+
+        renderTasks(filteredTasks);
+    }
+
+    function renderTasks(tasks) {
+        // Clear columns
+        todoList.innerHTML = '';
+        inprogressList.innerHTML = '';
+        doneList.innerHTML = '';
+
+        tasks.forEach(task => {
+            const card = createTaskCard(task);
+            if (task.status === 'todo') todoList.appendChild(card);
+            else if (task.status === 'inprogress') inprogressList.appendChild(card);
+            else if (task.status === 'done') doneList.appendChild(card);
+        });
+
+        // Update counts
+        todoCount.textContent = todoList.children.length;
+        inprogressCount.textContent = inprogressList.children.length;
+        doneCount.textContent = doneList.children.length;
+    }
+
+    // Sync Desktop and Mobile Inputs
+    function syncInputs(source, target, eventType = 'input') {
+        source.addEventListener(eventType, () => {
+            target.value = source.value;
+            applyFilters();
+        });
+    }
+
     function listenForTasks(boardId) {
         if (tasksUnsubscribe) tasksUnsubscribe(); // Unsubscribe from previous listener
 
@@ -430,24 +480,14 @@ const loadingOverlay = document.getElementById('loading-overlay');
         
         tasksUnsubscribe = onSnapshot(q, (querySnapshot) => {
             // Clear columns
-            todoList.innerHTML = '';
-            inprogressList.innerHTML = '';
-            doneList.innerHTML = '';
+            allTasks = [];
             
             querySnapshot.forEach((doc) => {
-                const task = doc.data();
-                const card = createTaskCard({ id: doc.id, ...task });
-                
-                if (task.status === 'todo') todoList.appendChild(card);
-                else if (task.status === 'inprogress') inprogressList.appendChild(card);
-                else if (task.status === 'done') doneList.appendChild(card);
+                allTasks.push({ id: doc.id, ...doc.data() });
             });
 
-            // Update counts
-            todoCount.textContent = todoList.children.length;
-            inprogressCount.textContent = inprogressList.children.length;
-            doneCount.textContent = doneList.children.length;
-
+            applyFilters();
+            
             // Hide loading state
             if(loadingOverlay) loadingOverlay.classList.add('hidden');
             document.getElementById('home-section').classList.remove('blur-sm', 'pointer-events-none');
@@ -469,6 +509,16 @@ const loadingOverlay = document.getElementById('loading-overlay');
     if (confirmOkBtn) confirmOkBtn.addEventListener('click', () => {
         if (pendingDeleteAction) pendingDeleteAction();
     });
+
+    // Search & Filter Listeners
+    if(searchInput && mobileSearchInput) {
+        syncInputs(searchInput, mobileSearchInput, 'input');
+        syncInputs(mobileSearchInput, searchInput, 'input');
+    }
+    if(filterSelect && mobileFilterSelect) {
+        syncInputs(filterSelect, mobileFilterSelect, 'change');
+        syncInputs(mobileFilterSelect, filterSelect, 'change');
+    }
 
     // Task Modal Actions
     if (deleteTaskBtn) deleteTaskBtn.addEventListener('click', () => {
